@@ -1,0 +1,2369 @@
+import 'package:flutter/material.dart';
+
+// ============================================================
+// MARKETPLACE DATA MODELS
+// ============================================================
+
+enum SellingMode {
+  fixed,
+  negotiation,
+  auction,
+}
+
+class Offer {
+  final String buyerName;
+  double pricePerKg;
+  final double quantityKg;
+  String status;
+
+  Offer({
+    required this.buyerName,
+    required this.pricePerKg,
+    required this.quantityKg,
+    this.status = 'Pending',
+  });
+}
+
+class ProductListing {
+  final String product;
+  final double quantityKg;
+  final double askingPrice;
+  final double minimumPrice;
+  final String quality;
+  final SellingMode sellingMode;
+
+  String status;
+  final List<Offer> offers;
+
+  ProductListing({
+    required this.product,
+    required this.quantityKg,
+    required this.askingPrice,
+    required this.minimumPrice,
+    required this.quality,
+    required this.sellingMode,
+    this.status = 'Active',
+    List<Offer>? offers,
+  }) : offers = offers ?? [];
+}
+
+// ============================================================
+// MARKETPLACE DATA CONTROLLER
+// ============================================================
+
+class MarketplaceController extends ChangeNotifier {
+  final List<ProductListing> listings = [];
+
+  MarketplaceController() {
+    // Demo listing for testing.
+    listings.add(
+      ProductListing(
+        product: 'Tomatoes',
+        quantityKg: 500,
+        askingPrice: 30,
+        minimumPrice: 27,
+        quality: 'Grade A',
+        sellingMode: SellingMode.auction,
+        offers: [
+          Offer(
+            buyerName: 'Fresh Mart',
+            pricePerKg: 31,
+            quantityKg: 200,
+          ),
+          Offer(
+            buyerName: 'Green Basket',
+            pricePerKg: 32,
+            quantityKg: 300,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void addListing(ProductListing listing) {
+    listings.add(listing);
+    notifyListeners();
+  }
+
+  void addOffer(
+    ProductListing listing,
+    Offer offer,
+  ) {
+    listing.offers.add(offer);
+    notifyListeners();
+  }
+
+  void acceptOffer(
+    ProductListing listing,
+    Offer offer,
+  ) {
+    offer.status = 'Accepted';
+    listing.status = 'Sold';
+
+    for (final other in listing.offers) {
+      if (other != offer) {
+        other.status = 'Rejected';
+      }
+    }
+
+    notifyListeners();
+  }
+
+  void rejectOffer(
+    ProductListing listing,
+    Offer offer,
+  ) {
+    offer.status = 'Rejected';
+    notifyListeners();
+  }
+
+  void counterOffer(
+    ProductListing listing,
+    Offer offer,
+    double price,
+  ) {
+    offer.pricePerKg = price;
+    offer.status = 'Counter Offered';
+    notifyListeners();
+  }
+}
+
+// ============================================================
+// MAIN MARKETPLACE SCREEN
+// ============================================================
+
+class MarketplaceScreen extends StatefulWidget {
+  const MarketplaceScreen({super.key});
+
+  @override
+  State<MarketplaceScreen> createState() =>
+      _MarketplaceScreenState();
+}
+
+class _MarketplaceScreenState
+    extends State<MarketplaceScreen> {
+
+  final MarketplaceController controller =
+      MarketplaceController();
+
+  bool farmerMode = true;
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey.shade50,
+
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.white,
+
+        title: const Text(
+          'Marketplace',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+
+      body: AnimatedBuilder(
+        animation: controller,
+        builder: (context, _) {
+          return Column(
+            children: [
+
+              // ==================================================
+              // HEADER
+              // ==================================================
+
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(
+                  20,
+                  10,
+                  20,
+                  20,
+                ),
+
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                ),
+
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+
+                  children: [
+
+                    const Text(
+                      'Sell smarter. Earn better. 🌱',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    const SizedBox(height: 5),
+
+                    Text(
+                      farmerMode
+                          ? 'Sell your produce directly to buyers.'
+                          : 'Buy fresh produce directly from farmers.',
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 14,
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    // ==================================================
+                    // FARMER / BUYER SWITCH
+                    // ==================================================
+
+                    Container(
+                      padding: const EdgeInsets.all(4),
+
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius:
+                            BorderRadius.circular(14),
+                      ),
+
+                      child: Row(
+                        children: [
+
+                          Expanded(
+                            child: _modeButton(
+                              title: 'Sell Produce',
+                              icon: Icons.agriculture,
+                              selected: farmerMode,
+                              onTap: () {
+                                setState(() {
+                                  farmerMode = true;
+                                });
+                              },
+                            ),
+                          ),
+
+                          Expanded(
+                            child: _modeButton(
+                              title: 'Buy Produce',
+                              icon: Icons.storefront,
+                              selected: !farmerMode,
+                              onTap: () {
+                                setState(() {
+                                  farmerMode = false;
+                                });
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // ==================================================
+              // CONTENT
+              // ==================================================
+
+              Expanded(
+                child: farmerMode
+                    ? FarmerMarketplace(
+                        controller: controller,
+                      )
+                    : BuyerMarketplace(
+                        controller: controller,
+                      ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _modeButton({
+    required String title,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+
+      child: AnimatedContainer(
+        duration:
+            const Duration(milliseconds: 200),
+
+        padding:
+            const EdgeInsets.symmetric(
+          vertical: 12,
+        ),
+
+        decoration: BoxDecoration(
+          color: selected
+              ? const Color(0xFF2E7D32)
+              : Colors.transparent,
+
+          borderRadius:
+              BorderRadius.circular(11),
+        ),
+
+        child: Row(
+          mainAxisAlignment:
+              MainAxisAlignment.center,
+
+          children: [
+
+            Icon(
+              icon,
+              size: 19,
+              color: selected
+                  ? Colors.white
+                  : Colors.grey.shade700,
+            ),
+
+            const SizedBox(width: 7),
+
+            Text(
+              title,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: selected
+                    ? Colors.white
+                    : Colors.grey.shade700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// FARMER MARKETPLACE
+// ============================================================
+
+class FarmerMarketplace extends StatelessWidget {
+  final MarketplaceController controller;
+
+  const FarmerMarketplace({
+    super.key,
+    required this.controller,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(18),
+
+      children: [
+
+        // ======================================================
+        // SELL PRODUCE CARD
+        // ======================================================
+
+        Container(
+          padding: const EdgeInsets.all(20),
+
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [
+                Color(0xFF2E7D32),
+                Color(0xFF43A047),
+              ],
+            ),
+
+            borderRadius:
+                BorderRadius.circular(18),
+          ),
+
+          child: Column(
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
+
+            children: [
+
+              const Icon(
+                Icons.agriculture,
+                color: Colors.white,
+                size: 38,
+              ),
+
+              const SizedBox(height: 12),
+
+              const Text(
+                'Sell Your Produce',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 21,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              const SizedBox(height: 5),
+
+              const Text(
+                'Set your price and let buyers compete for your produce.',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                ),
+              ),
+
+              const SizedBox(height: 18),
+
+              SizedBox(
+                width: double.infinity,
+
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            CreateListingScreen(
+                          controller: controller,
+                        ),
+                      ),
+                    );
+                  },
+
+                  icon: const Icon(Icons.add),
+
+                  label: const Text(
+                    'Create Listing',
+                  ),
+
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor:
+                        const Color(0xFF2E7D32),
+
+                    padding:
+                        const EdgeInsets.symmetric(
+                      vertical: 14,
+                    ),
+
+                    shape:
+                        RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 25),
+
+        const Text(
+          'My Listings',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        if (controller.listings.isEmpty)
+          _emptyCard(
+            'No products listed yet.',
+            Icons.inventory_2_outlined,
+          ),
+
+        ...controller.listings.map(
+          (listing) => _listingCard(
+            context,
+            listing,
+            controller,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _listingCard(
+    BuildContext context,
+    ProductListing listing,
+    MarketplaceController controller,
+  ) {
+    final bestOffer =
+        listing.offers.isEmpty
+            ? listing.askingPrice
+            : listing.offers
+                .map(
+                  (e) => e.pricePerKg,
+                )
+                .reduce(
+                  (a, b) => a > b ? a : b,
+                );
+
+    return Card(
+      elevation: 1,
+      margin:
+          const EdgeInsets.only(bottom: 14),
+
+      shape: RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.circular(16),
+      ),
+
+      child: InkWell(
+        borderRadius:
+            BorderRadius.circular(16),
+
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  ListingDetailsScreen(
+                listing: listing,
+                controller: controller,
+                farmerView: true,
+              ),
+            ),
+          );
+        },
+
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+
+          child: Column(
+            children: [
+
+              Row(
+                children: [
+
+                  Container(
+                    padding:
+                        const EdgeInsets.all(12),
+
+                    decoration: BoxDecoration(
+                      color:
+                          const Color(0xFFE8F5E9),
+
+                      borderRadius:
+                          BorderRadius.circular(12),
+                    ),
+
+                    child: Icon(
+                      listing.sellingMode ==
+                              SellingMode.auction
+                          ? Icons.gavel
+                          : Icons.eco,
+
+                      color:
+                          const Color(0xFF2E7D32),
+                    ),
+                  ),
+
+                  const SizedBox(width: 12),
+
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+
+                      children: [
+
+                        Text(
+                          listing.product,
+                          style:
+                              const TextStyle(
+                            fontSize: 18,
+                            fontWeight:
+                                FontWeight.bold,
+                          ),
+                        ),
+
+                        const SizedBox(height: 4),
+
+                        Text(
+                          '${listing.quantityKg.toStringAsFixed(0)} kg • '
+                          '${listing.quality}',
+                          style: TextStyle(
+                            color:
+                                Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  _statusChip(
+                    listing.status,
+                  ),
+                ],
+              ),
+
+              const Divider(height: 25),
+
+              Row(
+                mainAxisAlignment:
+                    MainAxisAlignment.spaceBetween,
+
+                children: [
+
+                  _priceInfo(
+                    'Your Price',
+                    '₹${listing.askingPrice.toStringAsFixed(0)}/kg',
+                  ),
+
+                  _priceInfo(
+                    'Best Offer',
+                    '₹${bestOffer.toStringAsFixed(0)}/kg',
+                  ),
+
+                  _priceInfo(
+                    'Offers',
+                    '${listing.offers.length}',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _priceInfo(
+    String title,
+    String value,
+  ) {
+    return Column(
+      crossAxisAlignment:
+          CrossAxisAlignment.start,
+
+      children: [
+
+        Text(
+          title,
+          style: TextStyle(
+            color: Colors.grey.shade600,
+            fontSize: 12,
+          ),
+        ),
+
+        const SizedBox(height: 3),
+
+        Text(
+          value,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _statusChip(String status) {
+    return Container(
+      padding:
+          const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 6,
+      ),
+
+      decoration: BoxDecoration(
+        color: status == 'Sold'
+            ? Colors.grey.shade200
+            : const Color(0xFFE8F5E9),
+
+        borderRadius:
+            BorderRadius.circular(20),
+      ),
+
+      child: Text(
+        status,
+        style: TextStyle(
+          color: status == 'Sold'
+              ? Colors.grey.shade700
+              : const Color(0xFF2E7D32),
+
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyCard(
+    String text,
+    IconData icon,
+  ) {
+    return Card(
+      child: Padding(
+        padding:
+            const EdgeInsets.all(30),
+
+        child: Column(
+          children: [
+
+            Icon(
+              icon,
+              size: 45,
+              color: Colors.grey,
+            ),
+
+            const SizedBox(height: 10),
+
+            Text(text),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// BUYER MARKETPLACE
+// ============================================================
+
+class BuyerMarketplace extends StatelessWidget {
+  final MarketplaceController controller;
+
+  const BuyerMarketplace({
+    super.key,
+    required this.controller,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+
+    final listings =
+        controller.listings.where(
+      (e) => e.status == 'Active',
+    );
+
+    return ListView(
+      padding: const EdgeInsets.all(18),
+
+      children: [
+
+        const Text(
+          'Fresh From Farmers',
+          style: TextStyle(
+            fontSize: 21,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+
+        const SizedBox(height: 5),
+
+        Text(
+          'Buy directly and get better prices.',
+          style: TextStyle(
+            color: Colors.grey.shade600,
+          ),
+        ),
+
+        const SizedBox(height: 18),
+
+        if (listings.isEmpty)
+          Card(
+            child: Padding(
+              padding:
+                  const EdgeInsets.all(30),
+
+            child: Column(
+              children: [
+
+                const Icon(
+                  Icons.storefront,
+                  size: 45,
+                ),
+
+                const SizedBox(height: 10),
+
+                const Text(
+                  'No produce available currently.',
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        ...listings.map(
+          (listing) => _buyerCard(
+            context,
+            listing,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buyerCard(
+    BuildContext context,
+    ProductListing listing,
+  ) {
+
+    final isAuction =
+        listing.sellingMode ==
+            SellingMode.auction;
+
+    final bestOffer =
+        listing.offers.isEmpty
+            ? listing.askingPrice
+            : listing.offers
+                .map(
+                  (e) => e.pricePerKg,
+                )
+                .reduce(
+                  (a, b) => a > b ? a : b,
+                );
+
+    return Card(
+      elevation: 1,
+
+      margin:
+          const EdgeInsets.only(bottom: 14),
+
+      shape: RoundedRectangleBorder(
+        borderRadius:
+            BorderRadius.circular(16),
+      ),
+
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+
+        child: Column(
+          crossAxisAlignment:
+              CrossAxisAlignment.start,
+
+          children: [
+
+            Row(
+              children: [
+
+                Container(
+                  padding:
+                      const EdgeInsets.all(12),
+
+                  decoration: BoxDecoration(
+                    color:
+                        const Color(0xFFE8F5E9),
+
+                    borderRadius:
+                        BorderRadius.circular(12),
+                  ),
+
+                  child: Icon(
+                    isAuction
+                        ? Icons.gavel
+                        : Icons.shopping_basket,
+
+                    color:
+                        const Color(0xFF2E7D32),
+                  ),
+                ),
+
+                const SizedBox(width: 12),
+
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+
+                    children: [
+
+                      Text(
+                        listing.product,
+                        style:
+                            const TextStyle(
+                          fontSize: 18,
+                          fontWeight:
+                              FontWeight.bold,
+                        ),
+                      ),
+
+                      Text(
+                        listing.quality,
+                        style: TextStyle(
+                          color:
+                              Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 6,
+                  ),
+
+                  decoration: BoxDecoration(
+                    color:
+                        const Color(0xFFE8F5E9),
+
+                    borderRadius:
+                        BorderRadius.circular(20),
+                  ),
+
+                  child: Text(
+                    isAuction
+                        ? 'AUCTION'
+                        : 'DIRECT',
+                    style:
+                        const TextStyle(
+                      color:
+                          Color(0xFF2E7D32),
+                      fontWeight:
+                          FontWeight.bold,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const Divider(height: 25),
+
+            Row(
+              mainAxisAlignment:
+                  MainAxisAlignment.spaceBetween,
+
+              children: [
+
+                _info(
+                  'Available',
+                  '${listing.quantityKg.toStringAsFixed(0)} kg',
+                ),
+
+                _info(
+                  'Farmer Price',
+                  '₹${listing.askingPrice.toStringAsFixed(0)}/kg',
+                ),
+
+                _info(
+                  isAuction
+                      ? 'Current Bid'
+                      : 'Price',
+                  '₹${bestOffer.toStringAsFixed(0)}/kg',
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 15),
+
+            SizedBox(
+              width: double.infinity,
+
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          ListingDetailsScreen(
+                        listing: listing,
+                        controller: controller,
+                        farmerView: false,
+                      ),
+                    ),
+                  );
+                },
+
+                icon: Icon(
+                  isAuction
+                      ? Icons.gavel
+                      : Icons.shopping_cart,
+                ),
+
+                label: Text(
+                  isAuction
+                      ? 'VIEW AUCTION'
+                      : 'BUY NOW',
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _info(
+    String title,
+    String value,
+  ) {
+    return Column(
+      crossAxisAlignment:
+          CrossAxisAlignment.start,
+
+      children: [
+
+        Text(
+          title,
+          style: TextStyle(
+            color: Colors.grey.shade600,
+            fontSize: 11,
+          ),
+        ),
+
+        const SizedBox(height: 3),
+
+        Text(
+          value,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ============================================================
+// CREATE LISTING
+// ============================================================
+
+class CreateListingScreen extends StatefulWidget {
+  final MarketplaceController controller;
+
+  const CreateListingScreen({
+    super.key,
+    required this.controller,
+  });
+
+  @override
+  State<CreateListingScreen> createState() =>
+      _CreateListingScreenState();
+}
+
+class _CreateListingScreenState
+    extends State<CreateListingScreen> {
+
+  final productController =
+      TextEditingController();
+
+  final quantityController =
+      TextEditingController();
+
+  final priceController =
+      TextEditingController();
+
+  final minimumController =
+      TextEditingController();
+
+  final qualityController =
+      TextEditingController(
+    text: 'Grade A',
+  );
+
+  SellingMode selectedMode =
+      SellingMode.auction;
+
+  @override
+  void dispose() {
+    productController.dispose();
+    quantityController.dispose();
+    priceController.dispose();
+    minimumController.dispose();
+    qualityController.dispose();
+
+    super.dispose();
+  }
+
+  void createListing() {
+
+    final product =
+        productController.text.trim();
+
+    final quantity =
+        double.tryParse(
+      quantityController.text,
+    );
+
+    final price =
+        double.tryParse(
+      priceController.text,
+    );
+
+    final minimum =
+        double.tryParse(
+      minimumController.text,
+    );
+
+    if (product.isEmpty ||
+        quantity == null ||
+        price == null ||
+        minimum == null ||
+        quantity <= 0 ||
+        price <= 0 ||
+        minimum <= 0) {
+
+      _showMessage(
+        'Please enter valid details.',
+      );
+
+      return;
+    }
+
+    if (minimum > price) {
+      _showMessage(
+        'Minimum price cannot exceed asking price.',
+      );
+
+      return;
+    }
+
+    widget.controller.addListing(
+      ProductListing(
+        product: product,
+        quantityKg: quantity,
+        askingPrice: price,
+        minimumPrice: minimum,
+        quality:
+            qualityController.text.trim().isEmpty
+                ? 'Standard'
+                : qualityController.text.trim(),
+        sellingMode: selectedMode,
+      ),
+    );
+
+    Navigator.pop(context);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Your produce has been listed successfully!',
+        ),
+      ),
+    );
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey.shade50,
+
+      appBar: AppBar(
+        title: const Text(
+          'Create Listing',
+        ),
+      ),
+
+      body: ListView(
+        padding: const EdgeInsets.all(18),
+
+        children: [
+
+          const Text(
+            'List Your Produce',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 5),
+
+          Text(
+            'Set your price and choose how you want to sell.',
+            style: TextStyle(
+              color: Colors.grey.shade600,
+            ),
+          ),
+
+          const SizedBox(height: 22),
+
+          _field(
+            controller: productController,
+            label: 'Product',
+            hint: 'Example: Tomato',
+            icon: Icons.eco,
+          ),
+
+          const SizedBox(height: 14),
+
+          _field(
+            controller: quantityController,
+            label: 'Quantity (kg)',
+            hint: 'Example: 500',
+            icon: Icons.scale,
+            number: true,
+          ),
+
+          const SizedBox(height: 14),
+
+          _field(
+            controller: priceController,
+            label: 'Asking Price (₹/kg)',
+            hint: 'Example: 30',
+            icon: Icons.currency_rupee,
+            number: true,
+          ),
+
+          const SizedBox(height: 14),
+
+          _field(
+            controller: minimumController,
+            label: 'Minimum Acceptable Price (₹/kg)',
+            hint: 'Example: 27',
+            icon: Icons.price_check,
+            number: true,
+          ),
+
+          const SizedBox(height: 14),
+
+          _field(
+            controller: qualityController,
+            label: 'Quality / Grade',
+            hint: 'Example: Grade A',
+            icon: Icons.star,
+          ),
+
+          const SizedBox(height: 25),
+
+          const Text(
+            'Selling Method',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          _sellingOption(
+            SellingMode.fixed,
+            Icons.sell,
+            'Fixed Price',
+            'Sell at the price you set.',
+          ),
+
+          _sellingOption(
+            SellingMode.negotiation,
+            Icons.handshake,
+            'Negotiation',
+            'Allow buyers to negotiate.',
+          ),
+
+          _sellingOption(
+            SellingMode.auction,
+            Icons.gavel,
+            'Auction',
+            'Let multiple buyers compete.',
+          ),
+
+          const SizedBox(height: 20),
+
+          SizedBox(
+            width: double.infinity,
+
+            child: ElevatedButton.icon(
+              onPressed: createListing,
+
+              icon: Icon(
+                selectedMode ==
+                        SellingMode.auction
+                    ? Icons.gavel
+                    : Icons.check_circle,
+              ),
+
+              label: Text(
+                selectedMode ==
+                        SellingMode.auction
+                    ? 'CREATE AUCTION'
+                    : 'CREATE LISTING',
+              ),
+
+              style: ElevatedButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(
+                  vertical: 15,
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  Widget _field({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    bool number = false,
+  }) {
+    return TextField(
+      controller: controller,
+
+      keyboardType: number
+          ? const TextInputType.numberWithOptions(
+              decimal: true,
+            )
+          : TextInputType.text,
+
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(icon),
+        filled: true,
+        fillColor: Colors.white,
+
+        border: OutlineInputBorder(
+          borderRadius:
+              BorderRadius.circular(13),
+          borderSide: BorderSide.none,
+        ),
+
+        enabledBorder: OutlineInputBorder(
+          borderRadius:
+              BorderRadius.circular(13),
+          borderSide: BorderSide(
+            color: Colors.grey.shade300,
+          ),
+        ),
+
+        focusedBorder: OutlineInputBorder(
+          borderRadius:
+              BorderRadius.circular(13),
+          borderSide: const BorderSide(
+            color: Color(0xFF2E7D32),
+            width: 2,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sellingOption(
+    SellingMode mode,
+    IconData icon,
+    String title,
+    String subtitle,
+  ) {
+    final selected =
+        selectedMode == mode;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          selectedMode = mode;
+        });
+      },
+
+      child: Container(
+        margin:
+            const EdgeInsets.only(bottom: 10),
+
+        padding:
+            const EdgeInsets.all(14),
+
+        decoration: BoxDecoration(
+          color: selected
+              ? const Color(0xFFE8F5E9)
+              : Colors.white,
+
+          borderRadius:
+              BorderRadius.circular(14),
+
+          border: Border.all(
+            color: selected
+                ? const Color(0xFF2E7D32)
+                : Colors.grey.shade300,
+
+            width: selected ? 2 : 1,
+          ),
+        ),
+
+        child: Row(
+          children: [
+
+            Icon(
+              icon,
+              color: const Color(0xFF2E7D32),
+            ),
+
+            const SizedBox(width: 12),
+
+            Expanded(
+              child: Column(
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
+
+                children: [
+
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  const SizedBox(height: 3),
+
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color:
+                          Colors.grey.shade600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            Icon(
+              selected
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_off,
+
+              color: selected
+                  ? const Color(0xFF2E7D32)
+                  : Colors.grey,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// LISTING DETAILS / AUCTION PAGE
+// ============================================================
+
+class ListingDetailsScreen extends StatefulWidget {
+  final ProductListing listing;
+  final MarketplaceController controller;
+  final bool farmerView;
+
+  const ListingDetailsScreen({
+    super.key,
+    required this.listing,
+    required this.controller,
+    required this.farmerView,
+  });
+
+  @override
+  State<ListingDetailsScreen> createState() =>
+      _ListingDetailsScreenState();
+}
+
+class _ListingDetailsScreenState
+    extends State<ListingDetailsScreen> {
+
+  double get bestOffer {
+
+    if (widget.listing.offers.isEmpty) {
+      return widget.listing.askingPrice;
+    }
+
+    return widget.listing.offers
+        .map(
+          (e) => e.pricePerKg,
+        )
+        .reduce(
+          (a, b) => a > b ? a : b,
+        );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+
+    final listing = widget.listing;
+
+    return Scaffold(
+      backgroundColor: Colors.grey.shade50,
+
+      appBar: AppBar(
+        title: Text(
+          listing.product,
+        ),
+      ),
+
+      body: AnimatedBuilder(
+        animation: widget.controller,
+
+        builder: (context, _) {
+
+          return ListView(
+            padding: const EdgeInsets.all(18),
+
+            children: [
+
+              // ==================================================
+              // PRODUCT HEADER
+              // ==================================================
+
+              Container(
+                padding:
+                    const EdgeInsets.all(20),
+
+                decoration: BoxDecoration(
+                  gradient:
+                      const LinearGradient(
+                    colors: [
+                      Color(0xFF2E7D32),
+                      Color(0xFF43A047),
+                    ],
+                  ),
+
+                  borderRadius:
+                      BorderRadius.circular(18),
+                ),
+
+                child: Row(
+                  children: [
+
+                    Container(
+                      padding:
+                          const EdgeInsets.all(14),
+
+                      decoration:
+                          BoxDecoration(
+                        color:
+                            Colors.white24,
+                        borderRadius:
+                            BorderRadius.circular(
+                          14,
+                        ),
+                      ),
+
+                      child: const Icon(
+                        Icons.eco,
+                        color: Colors.white,
+                        size: 38,
+                      ),
+                    ),
+
+                    const SizedBox(width: 14),
+
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+
+                        children: [
+
+                          Text(
+                            listing.product,
+                            style:
+                                const TextStyle(
+                              color:
+                                  Colors.white,
+                              fontSize: 24,
+                              fontWeight:
+                                  FontWeight.bold,
+                            ),
+                          ),
+
+                          const SizedBox(height: 5),
+
+                          Text(
+                            '${listing.quantityKg.toStringAsFixed(0)} kg • '
+                            '${listing.quality}',
+                            style:
+                                const TextStyle(
+                              color:
+                                  Colors.white70,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // ==================================================
+              // PRICE INFORMATION
+              // ==================================================
+
+              Card(
+                child: Padding(
+                  padding:
+                      const EdgeInsets.all(18),
+
+                  child: Row(
+                    mainAxisAlignment:
+                        MainAxisAlignment
+                            .spaceAround,
+
+                    children: [
+
+                      _stat(
+                        'Farmer Price',
+                        '₹${listing.askingPrice.toStringAsFixed(0)}',
+                      ),
+
+                      _stat(
+                        'Best Offer',
+                        '₹${bestOffer.toStringAsFixed(0)}',
+                      ),
+
+                      _stat(
+                        'Offers',
+                        '${listing.offers.length}',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              if (listing.sellingMode ==
+                  SellingMode.auction)
+                _auctionBanner(),
+
+              const SizedBox(height: 20),
+
+              // ==================================================
+              // FARMER VIEW
+              // ==================================================
+
+              if (widget.farmerView)
+                _farmerOffers(),
+
+              // ==================================================
+              // BUYER VIEW
+              // ==================================================
+
+              if (!widget.farmerView)
+                _buyerActions(),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _stat(
+    String title,
+    String value,
+  ) {
+    return Column(
+      children: [
+
+        Text(
+          title,
+          style: TextStyle(
+            color: Colors.grey.shade600,
+            fontSize: 12,
+          ),
+        ),
+
+        const SizedBox(height: 5),
+
+        Text(
+          value,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _auctionBanner() {
+    return Container(
+      padding:
+          const EdgeInsets.all(18),
+
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E1),
+
+        borderRadius:
+            BorderRadius.circular(15),
+
+        border: Border.all(
+          color: Colors.amber.shade300,
+        ),
+      ),
+
+      child: Row(
+        children: [
+
+          Icon(
+            Icons.gavel,
+            color: Colors.amber.shade800,
+            size: 32,
+          ),
+
+          const SizedBox(width: 12),
+
+          const Expanded(
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+
+              children: [
+
+                Text(
+                  'LIVE AUCTION',
+                  style: TextStyle(
+                    fontWeight:
+                        FontWeight.bold,
+                  ),
+                ),
+
+                SizedBox(height: 4),
+
+                Text(
+                  'Buyers can compete by submitting better offers.',
+                  style: TextStyle(
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================================
+  // FARMER OFFERS
+  // ==========================================================
+
+  Widget _farmerOffers() {
+
+    final offers =
+        widget.listing.offers;
+
+    return Column(
+      crossAxisAlignment:
+          CrossAxisAlignment.start,
+
+      children: [
+
+        const Text(
+          'Buyer Offers',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+
+        const SizedBox(height: 10),
+
+        if (offers.isEmpty)
+          Card(
+            child: Padding(
+              padding:
+                  const EdgeInsets.all(25),
+
+              child: Column(
+                children: [
+
+                  const Icon(
+                    Icons.hourglass_empty,
+                    size: 40,
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  const Text(
+                    'Waiting for buyer offers...',
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+        ...offers.map(
+          (offer) => _offerCard(offer),
+        ),
+      ],
+    );
+  }
+
+  Widget _offerCard(Offer offer) {
+
+    final isBest =
+        offer.pricePerKg ==
+            bestOffer;
+
+    return Card(
+      margin:
+          const EdgeInsets.only(bottom: 12),
+
+      child: Padding(
+        padding:
+            const EdgeInsets.all(16),
+
+        child: Column(
+          children: [
+
+            Row(
+              children: [
+
+                CircleAvatar(
+                  backgroundColor:
+                      const Color(0xFFE8F5E9),
+
+                  child: const Icon(
+                    Icons.store,
+                    color:
+                        Color(0xFF2E7D32),
+                  ),
+                ),
+
+                const SizedBox(width: 12),
+
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+
+                    children: [
+
+                      Text(
+                        offer.buyerName,
+                        style:
+                            const TextStyle(
+                          fontWeight:
+                              FontWeight.bold,
+                          fontSize: 17,
+                        ),
+                      ),
+
+                      Text(
+                        '${offer.quantityKg.toStringAsFixed(0)} kg',
+                        style: TextStyle(
+                          color:
+                              Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                if (isBest)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 5,
+                    ),
+
+                    decoration:
+                        BoxDecoration(
+                      color:
+                          const Color(0xFFE8F5E9),
+                      borderRadius:
+                          BorderRadius.circular(
+                        20,
+                      ),
+                    ),
+
+                    child: const Text(
+                      'BEST',
+                      style: TextStyle(
+                        color:
+                            Color(0xFF2E7D32),
+                        fontSize: 11,
+                        fontWeight:
+                            FontWeight.bold,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            Container(
+              width: double.infinity,
+
+              padding:
+                  const EdgeInsets.all(12),
+
+              decoration: BoxDecoration(
+                color:
+                    Colors.grey.shade50,
+
+                borderRadius:
+                    BorderRadius.circular(10),
+              ),
+
+              child: Text(
+                '₹${offer.pricePerKg.toStringAsFixed(0)}/kg',
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            Align(
+              alignment:
+                  Alignment.centerLeft,
+
+              child: Text(
+                'Status: ${offer.status}',
+                style: TextStyle(
+                  color:
+                      Colors.grey.shade600,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+
+            if (offer.status == 'Pending')
+              const SizedBox(height: 12),
+
+            if (offer.status == 'Pending')
+              Row(
+                children: [
+
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+
+                        widget.controller
+                            .rejectOffer(
+                          widget.listing,
+                          offer,
+                        );
+                      },
+
+                      child:
+                          const Text('Reject'),
+                    ),
+                  ),
+
+                  const SizedBox(width: 8),
+
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        _counterDialog(
+                          offer,
+                        );
+                      },
+
+                      child:
+                          const Text('Counter'),
+                    ),
+                  ),
+
+                  const SizedBox(width: 8),
+
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+
+                        widget.controller
+                            .acceptOffer(
+                          widget.listing,
+                          offer,
+                        );
+
+                        _message(
+                          'Deal confirmed successfully!',
+                        );
+                      },
+
+                      child:
+                          const Text('Accept'),
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==========================================================
+  // BUYER ACTIONS
+  // ==========================================================
+
+  Widget _buyerActions() {
+
+    if (widget.listing.status !=
+        'Active') {
+      return Card(
+        child: Padding(
+          padding:
+              const EdgeInsets.all(20),
+
+          child: Column(
+            children: [
+
+              const Icon(
+                Icons.check_circle,
+                color: Colors.green,
+                size: 45,
+              ),
+
+              const SizedBox(height: 8),
+
+              const Text(
+                'This produce has already been sold.',
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment:
+          CrossAxisAlignment.start,
+
+      children: [
+
+        const Text(
+          'Your Offer',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+
+        const SizedBox(height: 10),
+
+        Container(
+          padding:
+              const EdgeInsets.all(16),
+
+          decoration: BoxDecoration(
+            color: Colors.white,
+
+            borderRadius:
+                BorderRadius.circular(15),
+
+            border: Border.all(
+              color: Colors.grey.shade300,
+            ),
+          ),
+
+          child: Column(
+            children: [
+
+              const Row(
+                children: [
+
+                  Icon(
+                    Icons.lightbulb_outline,
+                    color:
+                        Color(0xFF2E7D32),
+                  ),
+
+                  SizedBox(width: 10),
+
+                  Expanded(
+                    child: Text(
+                      'Offer a better price to improve your chances of winning.',
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 15),
+
+              SizedBox(
+                width: double.infinity,
+
+                child: ElevatedButton.icon(
+                  onPressed: _offerDialog,
+
+                  icon: Icon(
+                    widget.listing.sellingMode ==
+                            SellingMode.auction
+                        ? Icons.gavel
+                        : Icons.local_offer,
+                  ),
+
+                  label: Text(
+                    widget.listing.sellingMode ==
+                            SellingMode.auction
+                        ? 'PLACE BID'
+                        : 'MAKE OFFER',
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ==========================================================
+  // BUYER OFFER DIALOG
+  // ==========================================================
+
+  void _offerDialog() {
+
+    final priceController =
+        TextEditingController();
+
+    final quantityController =
+        TextEditingController(
+      text: widget.listing.quantityKg
+          .toStringAsFixed(0),
+    );
+
+    showDialog(
+      context: context,
+
+      builder: (dialogContext) {
+
+        return AlertDialog(
+
+          title: Text(
+            widget.listing.sellingMode ==
+                    SellingMode.auction
+                ? 'Place Your Bid'
+                : 'Make Your Offer',
+          ),
+
+          content: Column(
+            mainAxisSize:
+                MainAxisSize.min,
+
+            children: [
+
+              TextField(
+                controller:
+                    priceController,
+
+                keyboardType:
+                    const TextInputType
+                        .numberWithOptions(
+                  decimal: true,
+                ),
+
+                decoration:
+                    const InputDecoration(
+                  labelText:
+                      'Price per kg',
+                  prefixText: '₹ ',
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              TextField(
+                controller:
+                    quantityController,
+
+                keyboardType:
+                    const TextInputType
+                        .numberWithOptions(
+                  decimal: true,
+                ),
+
+                decoration:
+                    const InputDecoration(
+                  labelText:
+                      'Quantity (kg)',
+                ),
+              ),
+            ],
+          ),
+
+          actions: [
+
+            TextButton(
+              onPressed: () {
+                Navigator.pop(
+                  dialogContext,
+                );
+              },
+
+              child:
+                  const Text('Cancel'),
+            ),
+
+            ElevatedButton(
+              onPressed: () {
+
+                final price =
+                    double.tryParse(
+                  priceController.text,
+                );
+
+                final quantity =
+                    double.tryParse(
+                  quantityController.text,
+                );
+
+                if (price == null ||
+                    quantity == null ||
+                    price <= 0 ||
+                    quantity <= 0) {
+                  return;
+                }
+
+                widget.controller.addOffer(
+
+                  widget.listing,
+
+                  Offer(
+                    buyerName:
+                        'Demo Buyer',
+                    pricePerKg:
+                        price,
+                    quantityKg:
+                        quantity,
+                  ),
+                );
+
+                Navigator.pop(
+                  dialogContext,
+                );
+
+                _message(
+                  'Your offer has been submitted!',
+                );
+              },
+
+              child:
+                  const Text('SUBMIT'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ==========================================================
+  // COUNTER OFFER
+  // ==========================================================
+
+  void _counterDialog(
+    Offer offer,
+  ) {
+
+    final controller =
+        TextEditingController(
+      text:
+          offer.pricePerKg
+              .toStringAsFixed(0),
+    );
+
+    showDialog(
+      context: context,
+
+      builder: (dialogContext) {
+
+        return AlertDialog(
+
+          title:
+              const Text('Counter Offer'),
+
+          content: TextField(
+            controller: controller,
+
+            keyboardType:
+                const TextInputType
+                    .numberWithOptions(
+              decimal: true,
+            ),
+
+            decoration:
+                const InputDecoration(
+              labelText:
+                  'Your counter price',
+              prefixText: '₹ ',
+            ),
+          ),
+
+          actions: [
+
+            TextButton(
+              onPressed: () {
+                Navigator.pop(
+                  dialogContext,
+                );
+              },
+
+              child:
+                  const Text('Cancel'),
+            ),
+
+            ElevatedButton(
+              onPressed: () {
+
+                final price =
+                    double.tryParse(
+                  controller.text,
+                );
+
+                if (price == null ||
+                    price <= 0) {
+                  return;
+                }
+
+                widget.controller
+                    .counterOffer(
+                  widget.listing,
+                  offer,
+                  price,
+                );
+
+                Navigator.pop(
+                  dialogContext,
+                );
+
+                _message(
+                  'Counter offer sent!',
+                );
+              },
+
+              child:
+                  const Text('SEND'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _message(String text) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(
+      SnackBar(
+        content: Text(text),
+      ),
+    );
+  }
+}
